@@ -1,0 +1,131 @@
+# Prometheus alerting rules
+# Used in: EVE_Gatekeeper
+#
+# 14 alert rules across 7 groups covering:
+# - Cache performance (miss rates)
+# - API latency (P95 thresholds)
+# - Error rates (5xx, client errors)
+# - Service degradation (component health)
+# - External API health (ESI, zKillboard)
+# - WebSocket connections
+# - Availability (no traffic, DDoS detection)
+
+groups:
+  - name: cache
+    rules:
+      - alert: HighCacheMissRate
+        expr: rate(cache_misses_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m])) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cache miss rate above 50%"
+          description: "Cache miss rate is {{ $value | humanizePercentage }} over the last 10 minutes."
+
+      - alert: CriticalCacheMissRate
+        expr: rate(cache_misses_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m])) > 0.8
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Cache miss rate above 80%"
+
+  - name: latency
+    rules:
+      - alert: HighAPILatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P95 API latency above 2 seconds"
+
+      - alert: CriticalAPILatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "P95 API latency above 5 seconds"
+
+  - name: errors
+    rules:
+      - alert: HighErrorRate
+        expr: rate(http_responses_total{status=~"5.."}[5m]) / rate(http_responses_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "5xx error rate above 5%"
+
+      - alert: CriticalErrorRate
+        expr: rate(http_responses_total{status=~"5.."}[5m]) / rate(http_responses_total[5m]) > 0.10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "5xx error rate above 10%"
+
+      - alert: ClientErrorSpike
+        expr: rate(http_responses_total{status=~"4.."}[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Client error rate exceeds 100/s"
+
+  - name: degradation
+    rules:
+      - alert: ServiceDegraded
+        expr: service_health_status == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Service component {{ $labels.component }} is degraded"
+
+  - name: external
+    rules:
+      - alert: ExternalAPIErrors
+        expr: rate(external_api_errors_total[5m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "External API {{ $labels.service }} error rate elevated"
+
+      - alert: ExternalAPIDown
+        expr: up{job="external_api"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "External API {{ $labels.service }} is unreachable"
+
+  - name: websocket
+    rules:
+      - alert: WebSocketConnectionDrop
+        expr: websocket_active_connections < 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No active WebSocket connections"
+
+  - name: availability
+    rules:
+      - alert: NoTraffic
+        expr: rate(http_requests_total[10m]) == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No HTTP traffic detected for 15 minutes"
+
+      - alert: DDoSDetection
+        expr: rate(http_requests_total[1m]) > 1000
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Possible DDoS — request rate exceeds 1000/s"

@@ -1,0 +1,7 @@
+# Dedicated namespace isolates resources and enables RBAC scoping
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: app
+  labels:
+    app.kubernetes.io/managed-by: kustomize
