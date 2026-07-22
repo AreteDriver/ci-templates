@@ -97,3 +97,5 @@ Copy the templates you need into your `.github/workflows/` directory and adjust:
 - Docker image names
 - K8s namespace and resource limits
 - Prometheus label selectors
+
+**Last verified:** 2026-07-22 — templates reflect current GitHub Actions runner versions and best practices.
